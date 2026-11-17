@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Skool Games Applications | Admin</title>
+  <style>
+    :root {
+      --bg: #f6f7f9; --card: #ffffff; --text: #1c1f24; --muted: #5f6672; --border: #dde1e6;
+      --accent: #ff8a0d; --accent-dark: #e67600; --bad: #c5221f; --bad-bg: #fce8e6;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    .wrap { max-width: 1400px; margin: 0 auto; padding: 24px 16px 48px; }
+    header.brand { text-align: center; margin-bottom: 20px; }
+    header.brand h1 { margin: 0; font-size: 1.6rem; }
+    header.brand p { margin: 4px 0 0; color: var(--muted); }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+    .card h2 { margin: 0 0 14px; font-size: 1.15rem; }
+    label { display: block; font-weight: 600; font-size: .92rem; margin-bottom: 4px; }
+    input, select { width: 100%; padding: 10px 12px; font: inherit; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+    input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+    button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--border); background: #fff; padding: 8px 14px; color: var(--text); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; padding: 14px 20px; width: 100%; font-size: 1.05rem; }
+    button.primary:hover { background: var(--accent-dark); }
+    button:disabled { opacity: .6; cursor: wait; }
+    .error { background: var(--bad-bg); color: var(--bad); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; }
+    [hidden] { display: none !important; }
+    a { color: var(--accent-dark); font-weight: 600; }
+
+    .login { max-width: 400px; margin: 40px auto; }
+    .login .field { margin-bottom: 14px; }
+
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .count { font-weight: 700; font-size: 1.1rem; }
+    .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .filters input { flex: 2 1 240px; width: auto; }
+    .filters select { flex: 1 1 160px; width: auto; }
+    .table-wrap { overflow-x: auto; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
+    table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    th { background: #fafbfc; font-weight: 600; }
+    tbody tr[data-id] { cursor: pointer; }
+    tbody tr[data-id]:hover { background: #fff7ee; }
+    td.num { text-align: right; }
+    .sub { color: var(--muted); font-size: .82rem; }
+
+    dialog { border: none; border-radius: 12px; padding: 0; width: min(720px, calc(100% - 32px)); max-height: calc(100% - 32px); }
+    dialog::backdrop { background: rgba(0,0,0,.4); }
+    dialog .head { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: #fff; }
+    dialog .head h3 { margin: 0; }
+    dialog dl { margin: 0; padding: 16px 20px; display: grid; grid-template-columns: 180px 1fr; gap: 8px 12px; }
+    dialog dt { font-weight: 600; color: var(--muted); }
+    dialog dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+    @media (max-width: 600px) {
+      dialog dl { grid-template-columns: 1fr; gap: 2px; }
+      dialog dd { margin-bottom: 10px; }
+      th, td { padding: 8px 10px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header class="brand">
+      <h1>TikTok Live Skool Games</h1>
+      <p>Applications Admin</p>
+    </header>
+
+    <section id="loginView" class="card login" hidden>
+      <h2>Admin Login</h2>
+      <form id="loginForm">
+        <div id="loginError" class="error" role="alert" hidden></div>
+        <div class="field"><label for="username">Username</label><input id="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+        <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required></div>
+        <button type="submit" class="primary" id="loginBtn">Sign In</button>
+      </form>
+    </section>
+
+    <section id="appView" hidden>
+      <div class="toolbar">
+        <div class="count" id="count"></div>
+        <div><span class="sub" id="who"></span> <button id="signOut">Sign out</button></div>
+      </div>
+      <div id="listError" class="error" role="alert" hidden></div>
+      <div id="listBody" hidden>
+        <div class="filters">
+          <input id="search" type="search" placeholder="Search name, email, TikTok or niche" aria-label="Search">
+          <select id="nicheFilter" aria-label="Niche"><option value="">All niches</option></select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Submitted</th><th>Name</th><th>Email</th><th>Phone</th><th>TikTok</th>
+                <th class="num">Followers</th><th>Niche</th><th>MRR</th><th>Video</th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="detail">
+    <div class="head"><h3 id="detailTitle">Application</h3><button id="closeDetail" aria-label="Close">✕</button></div>
+    <dl id="detailList"></dl>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="config.js"></script>
+  <script>
+    const sb = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_KEY);
+    const $ = id => document.getElementById(id);
+    let all = [];
+
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const date = d => d ? new Date(d).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' }) + ' ET' : '';
+    const num = n => n == null || n === '' ? '' : Number(n).toLocaleString('en-US');
+    const safeUrl = u => { try { const x = new URL(String(u).trim()); return /^https?:$/.test(x.protocol) ? x.href : null; } catch { return null; } };
+    const link = (u, text) => { const h = safeUrl(u); return h ? `<a href="${esc(h)}" target="_blank" rel="noopener noreferrer">${esc(text ?? u)}</a>` : null; };
+    const toEmail = u => u.includes('@') ? u : u + '@goliveacademy.com';
+
+    function showLogin() { $('loginView').hidden = false; $('appView').hidden = true; }
+
+    async function showApp(session) {
+      $('loginView').hidden = true;
+      $('appView').hidden = false;
+      $('who').textContent = session.user.email;
+      $('listError').hidden = true;
+      $('listBody').hidden = true;
+      $('count').textContent = 'Loading…';
+      const { data, error } = await sb.from('skool_games_applications').select('*').order('created_at', { ascending: false });
+      if (error) {
+        $('count').textContent = '';
+        $('listError').textContent = "This account doesn't have access.";
+        $('listError').hidden = false;
+        return;
+      }
+      all = data || [];
+      const niches = [...new Set(all.map(r => (r.niche || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+      $('nicheFilter').innerHTML = '<option value="">All niches</option>' + niches.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+      $('listBody').hidden = false;
+      render();
+    }
+
+    function filtered() {
+      const q = $('search').value.trim().toLowerCase();
+      const niche = $('nicheFilter').value;
+      return all.filter(r =>
+        (!niche || (r.niche || '').trim() === niche) &&
+        (!q || [r.full_name, r.email, r.tiktok, r.niche].some(v => String(v ?? '').toLowerCase().includes(q))));
+    }
+
+    function render() {
+      const rows = filtered();
+      const total = all.length;
+      $('count').textContent = rows.length === total
+        ? `${total} application${total === 1 ? '' : 's'}`
+        : `${rows.length} of ${total} applications`;
+      $('rows').innerHTML = rows.map(r => `
+        <tr data-id="${esc(r.id)}">
+          <td>${esc(date(r.created_at))}</td>
+          <td>${esc(r.full_name)}</td>
+          <td>${esc(r.email)}</td>
+          <td>${esc(r.phone)}</td>
+          <td>${esc(r.tiktok)}</td>
+          <td class="num">${esc(num(r.tiktok_followers))}</td>
+          <td>${esc(r.niche)}</td>
+          <td>${esc(r.mrr)}</td>
+          <td>${link(r.video_url, 'Watch') || '<span class="sub">None</span>'}</td>
+        </tr>`).join('') || `<tr><td colspan="9" class="sub">${total ? 'No applications match.' : 'No applications yet.'}</td></tr>`;
+    }
+
+    function openDetail(r) {
+      const items = [
+        ['Submitted', esc(date(r.created_at))],
+        ['Full Name', esc(r.full_name)],
+        ['Email', esc(r.email)],
+        ['Phone', esc(r.phone)],
+        ['TikTok', esc(r.tiktok)],
+        ['TikTok Followers', esc(num(r.tiktok_followers))],
+        ['Niche', esc(r.niche)],
+        ['Community', esc(r.community)],
+        ['MRR', esc(r.mrr)],
+        ['Why Choose You', esc(r.why_choose_you)],
+        ['Live Experience', esc(r.live_experience)],
+        ['7-Day Commit', esc(r.seven_day_commit)],
+        ['Note to Sam', esc(r.note_to_sam)],
+        ['Video', link(r.video_url) || esc(r.video_url)],
+      ];
+      $('detailTitle').textContent = r.full_name || 'Application';
+      $('detailList').innerHTML = items.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v || '<span class="sub">—</span>'}</dd>`).join('');
+      $('detail').showModal();
+    }
+
+    $('rows').addEventListener('click', e => {
+      if (e.target.closest('a')) return;
+      const tr = e.target.closest('tr[data-id]');
+      if (!tr) return;
+      const r = all.find(x => String(x.id) === tr.dataset.id);
+      if (r) openDetail(r);
+    });
+    $('closeDetail').addEventListener('click', () => $('detail').close());
+    $('detail').addEventListener('click', e => { if (e.target === $('detail')) $('detail').close(); });
+    $('search').addEventListener('input', render);
+    $('nicheFilter').addEventListener('change', render);
+
+    $('loginForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      $('loginError').hidden = true;
+      $('loginBtn').disabled = true;
+      const { data, error } = await sb.auth.signInWithPassword({ email: toEmail($('username').value.trim()), password: $('password').value });
+      $('loginBtn').disabled = false;
+      if (error) { $('loginError').textContent = 'Incorrect username or password.'; $('loginError').hidden = false; return; }
+      $('password').value = '';
+      showApp(data.session);
+    });
+
+    $('signOut').addEventListener('click', async () => {
+      await sb.auth.signOut();
+      all = [];
+      $('rows').innerHTML = '';
+      $('search').value = '';
+      showLogin();
+    });
+
+    sb.auth.getSession().then(({ data }) => data.session ? showApp(data.session) : showLogin());
+  </script>
+</body>
+</html>
