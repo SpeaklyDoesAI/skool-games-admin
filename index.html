@@ -9,6 +9,7 @@
     :root {
       --bg: #f6f7f9; --card: #ffffff; --text: #1c1f24; --muted: #5f6672; --border: #dde1e6;
       --accent: #ff8a0d; --accent-dark: #e67600; --bad: #c5221f; --bad-bg: #fce8e6;
+      --good: #188038; --good-dark: #137333; --good-bg: #e6f4ea;
     }
     * { box-sizing: border-box; }
     body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
@@ -45,6 +46,24 @@
     tbody tr[data-id]:hover { background: #fff7ee; }
     td.num { text-align: right; }
     .sub { color: var(--muted); font-size: .82rem; }
+
+    .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .tabs button { font-weight: 600; }
+    .tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .tabs .n { display: inline-block; min-width: 1.6em; margin-left: 4px; padding: 0 6px; border-radius: 999px; background: rgba(0,0,0,.08); font-size: .82rem; text-align: center; }
+    button.approve { background: var(--good); border-color: var(--good); color: #fff; font-weight: 600; }
+    button.approve:hover { background: var(--good-dark); }
+    button.deny { background: var(--bad); border-color: var(--bad); color: #fff; font-weight: 600; }
+    button.deny:hover { background: #a50e0e; }
+    td .actions { display: flex; gap: 6px; }
+    td .actions button { padding: 4px 10px; font-size: .85rem; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-weight: 600; font-size: .82rem; }
+    .badge.approved { background: var(--good-bg); color: var(--good-dark); }
+    .badge.denied { background: var(--bad-bg); color: var(--bad); }
+    .badge.pending { background: #fff3e0; color: var(--accent-dark); }
+    .status-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+    .status-bar .grow { flex: 1 1 auto; }
+    dialog .error { margin: 12px 20px 0; }
 
     dialog { border: none; border-radius: 12px; padding: 0; width: min(720px, calc(100% - 32px)); max-height: calc(100% - 32px); }
     dialog::backdrop { background: rgba(0,0,0,.4); }
@@ -85,6 +104,12 @@
       </div>
       <div id="listError" class="error" role="alert" hidden></div>
       <div id="listBody" hidden>
+        <div class="tabs" role="tablist" id="tabs">
+          <button role="tab" data-status="pending" aria-selected="true">Pending <span class="n" id="n-pending">0</span></button>
+          <button role="tab" data-status="approved" aria-selected="false">Approved <span class="n" id="n-approved">0</span></button>
+          <button role="tab" data-status="denied" aria-selected="false">Denied <span class="n" id="n-denied">0</span></button>
+        </div>
+        <div id="actionError" class="error" role="alert" hidden></div>
         <div class="filters">
           <input id="search" type="search" placeholder="Search name, email, TikTok or niche" aria-label="Search">
           <select id="nicheFilter" aria-label="Niche"><option value="">All niches</option></select>
@@ -94,7 +119,7 @@
             <thead>
               <tr>
                 <th>Submitted</th><th>Name</th><th>Email</th><th>Phone</th><th>TikTok</th>
-                <th class="num">Followers</th><th>Niche</th><th>MRR</th><th>Video</th>
+                <th class="num">Followers</th><th>Niche</th><th>MRR</th><th>Video</th><th id="extraCol">Review</th>
               </tr>
             </thead>
             <tbody id="rows"></tbody>
@@ -106,6 +131,8 @@
 
   <dialog id="detail">
     <div class="head"><h3 id="detailTitle">Application</h3><button id="closeDetail" aria-label="Close">✕</button></div>
+    <div id="detailError" class="error" role="alert" hidden></div>
+    <div class="status-bar" id="detailStatus"></div>
     <dl id="detailList"></dl>
   </dialog>
 
@@ -115,6 +142,11 @@
     const sb = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_KEY);
     const $ = id => document.getElementById(id);
     let all = [];
+    let tab = 'pending';
+    let detailId = null;
+    const STATUSES = ['pending', 'approved', 'denied'];
+    const LABEL = { pending: 'Pending', approved: 'Approved', denied: 'Denied' };
+    const statusOf = r => STATUSES.includes(r.status) ? r.status : 'pending';
 
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     const date = d => d ? new Date(d).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' }) + ' ET' : '';
@@ -149,17 +181,23 @@
     function filtered() {
       const q = $('search').value.trim().toLowerCase();
       const niche = $('nicheFilter').value;
-      return all.filter(r =>
+      return all.filter(r => statusOf(r) === tab &&
         (!niche || (r.niche || '').trim() === niche) &&
         (!q || [r.full_name, r.email, r.tiktok, r.niche].some(v => String(v ?? '').toLowerCase().includes(q))));
     }
 
     function render() {
       const rows = filtered();
-      const total = all.length;
+      const counts = { pending: 0, approved: 0, denied: 0 };
+      all.forEach(r => counts[statusOf(r)]++);
+      STATUSES.forEach(s => $('n-' + s).textContent = counts[s]);
+      document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.status === tab)));
+      $('extraCol').textContent = tab === 'pending' ? 'Review' : 'Status';
+      const total = counts[tab];
+      const word = LABEL[tab].toLowerCase();
       $('count').textContent = rows.length === total
-        ? `${total} application${total === 1 ? '' : 's'}`
-        : `${rows.length} of ${total} applications`;
+        ? `${total} ${word} application${total === 1 ? '' : 's'}`
+        : `${rows.length} of ${total} ${word} applications`;
       $('rows').innerHTML = rows.map(r => `
         <tr data-id="${esc(r.id)}">
           <td>${esc(date(r.created_at))}</td>
@@ -171,7 +209,35 @@
           <td>${esc(r.niche)}</td>
           <td>${esc(r.mrr)}</td>
           <td>${link(r.video_url, 'Watch') || '<span class="sub">None</span>'}</td>
-        </tr>`).join('') || `<tr><td colspan="9" class="sub">${total ? 'No applications match.' : 'No applications yet.'}</td></tr>`;
+          <td>${tab === 'pending'
+            ? '<div class="actions"><button class="approve" data-act="approved">Approve</button><button class="deny" data-act="denied">Deny</button></div>'
+            : `<span class="badge ${tab}">${LABEL[tab]}</span> <span class="sub">${esc(date(r.decided_at))}</span>`}</td>
+        </tr>`).join('') || `<tr><td colspan="10" class="sub">${total ? 'No applications match.' : `No ${word} applications.`}</td></tr>`;
+    }
+
+    async function setStatus(id, status, btns, errEl) {
+      if (status === 'denied' && !confirm('Deny this application?')) return;
+      errEl.hidden = true;
+      btns.forEach(b => b.disabled = true);
+      const { data, error } = await sb.rpc('set_skool_games_status', { p_id: id, p_status: status });
+      btns.forEach(b => b.disabled = false);
+      const res = Array.isArray(data) ? data[0] : data;
+      if (error || !res) {
+        errEl.textContent = "Couldn't update the status. Please try again.";
+        errEl.hidden = false;
+        return;
+      }
+      const r = all.find(x => String(x.id) === String(id));
+      if (r) { r.status = res.status; r.decided_at = res.decided_at; }
+      render();
+      if (r && detailId != null && String(detailId) === String(id)) renderStatus(r);
+    }
+
+    function renderStatus(r) {
+      const s = statusOf(r);
+      $('detailStatus').innerHTML = s === 'pending'
+        ? '<span class="badge pending">Pending</span><span class="grow"></span><button class="approve" data-act="approved">Approve</button><button class="deny" data-act="denied">Deny</button>'
+        : `<span class="badge ${s}">${LABEL[s]}</span><span class="sub">${esc(date(r.decided_at))}</span><span class="grow"></span><button data-act="pending">Move back to Pending</button>`;
     }
 
     function openDetail(r) {
@@ -191,6 +257,9 @@
         ['Note to Sam', esc(r.note_to_sam)],
         ['Video', link(r.video_url) || esc(r.video_url)],
       ];
+      detailId = r.id;
+      $('detailError').hidden = true;
+      renderStatus(r);
       $('detailTitle').textContent = r.full_name || 'Application';
       $('detailList').innerHTML = items.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v || '<span class="sub">—</span>'}</dd>`).join('');
       $('detail').showModal();
@@ -200,9 +269,23 @@
       if (e.target.closest('a')) return;
       const tr = e.target.closest('tr[data-id]');
       if (!tr) return;
+      const act = e.target.closest('button[data-act]');
+      if (act) { setStatus(tr.dataset.id, act.dataset.act, [...tr.querySelectorAll('button')], $('actionError')); return; }
       const r = all.find(x => String(x.id) === tr.dataset.id);
       if (r) openDetail(r);
     });
+    $('detailStatus').addEventListener('click', e => {
+      const act = e.target.closest('button[data-act]');
+      if (act && detailId != null) setStatus(detailId, act.dataset.act, [...$('detailStatus').querySelectorAll('button')], $('detailError'));
+    });
+    $('tabs').addEventListener('click', e => {
+      const b = e.target.closest('button[data-status]');
+      if (!b) return;
+      tab = b.dataset.status;
+      $('actionError').hidden = true;
+      render();
+    });
+    $('detail').addEventListener('close', () => { detailId = null; });
     $('closeDetail').addEventListener('click', () => $('detail').close());
     $('detail').addEventListener('click', e => { if (e.target === $('detail')) $('detail').close(); });
     $('search').addEventListener('input', render);
