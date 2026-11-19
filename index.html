@@ -61,6 +61,11 @@
     .badge.approved { background: var(--good-bg); color: var(--good-dark); }
     .badge.denied { background: var(--bad-bg); color: var(--bad); }
     .badge.pending { background: #fff3e0; color: var(--accent-dark); }
+    .badge.maybe { background: #fef7d6; color: #7a5200; }
+    button.maybe { background: #f4b400; border-color: #f4b400; color: #1c1f24; font-weight: 600; }
+    button.maybe:hover { background: #e0a500; }
+    td .actions { margin-top: 4px; }
+    td .actions:first-child { margin-top: 0; }
     .status-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border); }
     .status-bar .grow { flex: 1 1 auto; }
     dialog .error { margin: 12px 20px 0; }
@@ -87,8 +92,9 @@
       .toolbar { gap: 4px 8px; }
       #who { overflow-wrap: anywhere; }
 
-      .tabs { position: sticky; top: 0; z-index: 5; flex-wrap: nowrap; gap: 6px; margin: 0 -16px 12px; padding: 8px 16px; background: var(--bg); }
-      .tabs button { flex: 1 1 0; min-width: 0; padding: 6px 4px; font-size: 15px; white-space: nowrap; }
+      .tabs { position: sticky; top: 0; z-index: 5; flex-wrap: nowrap; gap: 6px; margin: 0 -16px 12px; padding: 8px 16px; background: var(--bg); overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
+      .tabs::-webkit-scrollbar { display: none; }
+      .tabs button { flex: 1 0 auto; padding: 6px 10px; font-size: 15px; white-space: nowrap; }
       .tabs .n { margin-left: 2px; padding: 0 5px; min-width: 1.4em; }
 
       .filters { flex-direction: column; }
@@ -103,8 +109,9 @@
       .app-card .row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; }
       .app-card .row a { display: inline-flex; align-items: center; min-height: 44px; }
       .app-card .row .sub.none { display: inline-flex; align-items: center; min-height: 44px; }
-      .card-actions { display: flex; gap: 10px; margin-top: 6px; }
-      .card-actions button { flex: 1 1 0; min-height: 48px; }
+      .card-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+      .card-actions button { flex: 1 1 0; min-width: 0; min-height: 48px; padding: 8px 6px; }
+      .card-actions .to-pending, .status-bar .to-pending { flex-basis: 100%; }
       .cards .empty { padding: 16px; }
 
       dialog[open] { display: flex; flex-direction: column; }
@@ -150,6 +157,7 @@
       <div id="listBody" hidden>
         <div class="tabs" role="tablist" id="tabs">
           <button role="tab" data-status="pending" aria-selected="true">Pending <span class="n" id="n-pending">0</span></button>
+          <button role="tab" data-status="maybe" aria-selected="false">Maybe <span class="n" id="n-maybe">0</span></button>
           <button role="tab" data-status="approved" aria-selected="false">Approved <span class="n" id="n-approved">0</span></button>
           <button role="tab" data-status="denied" aria-selected="false">Denied <span class="n" id="n-denied">0</span></button>
         </div>
@@ -189,9 +197,19 @@
     let all = [];
     let tab = 'pending';
     let detailId = null;
-    const STATUSES = ['pending', 'approved', 'denied'];
-    const LABEL = { pending: 'Pending', approved: 'Approved', denied: 'Denied' };
+    const STATUSES = ['pending', 'maybe', 'approved', 'denied'];
+    const LABEL = { pending: 'Pending', maybe: 'Maybe', approved: 'Approved', denied: 'Denied' };
     const statusOf = r => STATUSES.includes(r.status) ? r.status : 'pending';
+    const BTN = {
+      approved: '<button class="approve" data-act="approved">Approve</button>',
+      maybe: '<button class="maybe" data-act="maybe">Maybe</button>',
+      denied: '<button class="deny" data-act="denied">Deny</button>',
+      pending: '<button class="to-pending" data-act="pending">Move back to Pending</button>',
+    };
+    const ACTIONS = { pending: ['approved', 'maybe', 'denied'], maybe: ['approved', 'denied', 'pending'], approved: ['pending'], denied: ['pending'] };
+    const buttons = s => ACTIONS[s].map(a => BTN[a]).join('');
+    // Rows/cards show buttons only for Pending and Maybe; Approved/Denied are changed from the detail view.
+    const listButtons = s => (s === 'pending' || s === 'maybe') ? buttons(s) : '';
 
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     const date = d => d ? new Date(d).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' }) + ' ET' : '';
@@ -199,6 +217,9 @@
     const safeUrl = u => { try { const x = new URL(String(u).trim()); return /^https?:$/.test(x.protocol) ? x.href : null; } catch { return null; } };
     const link = (u, text) => { const h = safeUrl(u); return h ? `<a href="${esc(h)}" target="_blank" rel="noopener noreferrer">${esc(text ?? u)}</a>` : null; };
     const toEmail = u => u.includes('@') ? u : u + '@goliveacademy.com';
+    const statusText = (s, r) => s === 'pending'
+      ? '<span class="badge pending">Pending</span>'
+      : `<span class="badge ${s}">${s === 'maybe' ? 'Marked maybe' : LABEL[s]}</span> <span class="sub">${esc(date(r.decided_at))}</span>`;
 
     function showLogin() { $('loginView').hidden = false; $('appView').hidden = true; }
 
@@ -233,7 +254,7 @@
 
     function render() {
       const rows = filtered();
-      const counts = { pending: 0, approved: 0, denied: 0 };
+      const counts = Object.fromEntries(STATUSES.map(s => [s, 0]));
       all.forEach(r => counts[statusOf(r)]++);
       STATUSES.forEach(s => $('n-' + s).textContent = counts[s]);
       document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.status === tab)));
@@ -255,9 +276,7 @@
           <td>${esc(r.niche)}</td>
           <td>${esc(r.mrr)}</td>
           <td>${link(r.video_url, 'Watch') || '<span class="sub">None</span>'}</td>
-          <td>${tab === 'pending'
-            ? '<div class="actions"><button class="approve" data-act="approved">Approve</button><button class="deny" data-act="denied">Deny</button></div>'
-            : `<span class="badge ${tab}">${LABEL[tab]}</span> <span class="sub">${esc(date(r.decided_at))}</span>`}</td>
+          <td>${tab === 'pending' ? '' : statusText(tab, r)}${listButtons(tab) ? `<div class="actions">${listButtons(tab)}</div>` : ''}</td>
         </tr>`).join('') || `<tr><td colspan="10" class="sub">${emptyMsg}</td></tr>`;
       $('cards').innerHTML = rows.map(r => `
         <div class="app-card" data-id="${esc(r.id)}" role="button" tabindex="0">
@@ -267,9 +286,8 @@
             <span class="sub">${esc(date(r.created_at))}</span>
             ${link(r.video_url, 'Watch video') || '<span class="sub none">No video</span>'}
           </div>
-          ${tab === 'pending'
-            ? '<div class="card-actions"><button class="approve" data-act="approved">Approve</button><button class="deny" data-act="denied">Deny</button></div>'
-            : `<div><span class="badge ${tab}">${LABEL[tab]}</span> <span class="sub">${esc(date(r.decided_at))}</span></div>`}
+          ${tab === 'pending' ? '' : `<div>${statusText(tab, r)}</div>`}
+          ${listButtons(tab) ? `<div class="card-actions">${listButtons(tab)}</div>` : ''}
         </div>`).join('') || `<div class="card empty sub">${emptyMsg}</div>`;
     }
 
@@ -293,9 +311,7 @@
 
     function renderStatus(r) {
       const s = statusOf(r);
-      $('detailStatus').innerHTML = s === 'pending'
-        ? '<span class="badge pending">Pending</span><span class="grow"></span><button class="approve" data-act="approved">Approve</button><button class="deny" data-act="denied">Deny</button>'
-        : `<span class="badge ${s}">${LABEL[s]}</span><span class="sub">${esc(date(r.decided_at))}</span><span class="grow"></span><button data-act="pending">Move back to Pending</button>`;
+      $('detailStatus').innerHTML = `${statusText(s, r)}<span class="grow"></span>${buttons(s)}`;
     }
 
     function openDetail(r) {
@@ -346,6 +362,7 @@
       if (!b) return;
       tab = b.dataset.status;
       $('actionError').hidden = true;
+      b.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       render();
     });
     $('detail').addEventListener('close', () => { detailId = null; });
